@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PharmaStock — управление запасами лекарств</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap head-inner">
+    <div>
+      <div class="brand">PharmaStock · демо-стенд</div>
+      <h1>Управление запасами лекарств</h1>
+      <p class="sub">Прогноз спроса · приоритет партий · прогноз списаний · рекомендации по закупкам</p>
+    </div>
+    <div class="settings">
+      <label>Минимальный остаточный срок годности
+        <select id="msl">
+          {% for v in allowed_msl %}
+          <option value="{{ v }}" {% if v == default_msl %}selected{% endif %}>{{ v }} дней</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="today">Данные на <b id="todayLabel">…</b></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="error"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="stock" class="active">📦 Складские запасы</button>
+    <button data-view="priority">🔥 Приоритетные партии <span class="cnt" id="cntPrio">0</span></button>
+    <button data-view="loss">📉 Прогноз потерь <span class="cnt" id="cntLoss">0</span></button>
+    <button data-view="purchase">🛒 Рекомендации по закупке <span class="cnt" id="cntBuy">0</span></button>
+  </nav>
+
+  <div id="view-stock" class="view"><div class="loading">Загрузка данных…</div></div>
+  <div id="view-priority" class="view" hidden></div>
+  <div id="view-loss" class="view" hidden></div>
+  <div id="view-purchase" class="view" hidden></div>
+
+  <div class="method">
+    <h3>Как это считается</h3>
+    <ul>
+      <li><b>Прогноз спроса.</b> Линейная регрессия по фактическим продажам за последние 60 дней; прогноз усредняется на 30 дней вперёд и сглаживается со средним за 14 дней (75% / 25%).</li>
+      <li><b>Минимальный остаточный срок годности</b> — задаётся переключателем сверху. Партия, у которой до истечения срока остаётся меньше этого значения, считается недоступной для продажи клиенту.</li>
+      <li><b>Списание.</b> Дискретно-событийная симуляция по дням: спрос ежедневно «снимается» с партии с самым близким сроком годности (FEFO). Когда окно продажи партии закрывается, её остаток уходит в списание.</li>
+      <li><b>Рекомендация по закупке.</b> <code>Потребность = прогноз × (срок поставки + 30 дней) × 1,15</code>. Из потребности вычитается объём, который реально удастся продать из текущего запаса (с учётом списаний). Если физический остаток более чем в 1,5 раза превышает потребность — закупка блокируется как избыточная.</li>
+    </ul>
+    <h3>Статусы</h3>
+    <ul>
+      <li><span class="badge b-danger">Дефицит</span> — запаса не хватит до следующей поставки.</li>
+      <li><span class="badge b-danger">Избыток + списание</span> — товара больше потребности, и часть уйдёт в списание.</li>
+      <li><span class="badge b-warn">Риск списания</span> — есть партии, которые не успеют распродать.</li>
+      <li><span class="badge b-warn">Избыток</span> — запаса больше чем на 120 дней продаж.</li>
+      <li><span class="badge b-ok">Норма</span> — запас сбалансирован.</li>
+    </ul>
+  </div>
+
+  <footer>Демонстрационные данные · расчёты выполняются на сервере (Python / Flask)</footer>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
