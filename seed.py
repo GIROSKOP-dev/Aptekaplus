@@ -1,166 +1,210 @@
-"""Наполнение БД вымышленными данными.
-
-Запуск:  python seed.py
-
-Что делает:
-  1. Очищает таблицы sales, batches, drugs.
-  2. Вставляет 10 препаратов из прототипа.
-  3. Вставляет партии.
-  4. Генерирует 120 дней продаж той же логикой, что в прототипе
-     (random.Random(seed)) — цифры совпадут с демкой.
-"""
+"""Заполнить БД демо-данными (эквивалент data.js)."""
 import asyncio
+import json
 import random
 from datetime import date, timedelta
 
 from app import db_api
 from app.config import DATABASE_URL
 
+# ── Ключевой момент ─────────────────────────────────────────────────
+DEMO_TODAY = date(2025, 2, 15)      # дата, на которую рассчитаны DRUGS ниже
+REAL_TODAY = date.today()           # реальная сегодня
+SHIFT = (REAL_TODAY - DEMO_TODAY).days
 
-# ------------------------------------------------------------------
-# Данные (скопированы из прототипа FastAPI)
-# ------------------------------------------------------------------
-DRUGS_RAW = [
-    dict(id="amox", name="Амоксициллин", form="капс. 500 мг №20",
-         priceIn=78, leadTime=14, packSize=100, minOrder=100,
-         baseSales=40, salesStart=0.80, salesEnd=1.20, weekendFactor=0.85, seed=101,
-         batches=[dict(code="AM-2417", qty=260, expires=72),
-                  dict(code="AM-2431", qty=480, expires=265),
-                  dict(code="AM-2444", qty=300, expires=480)]),
-    dict(id="para", name="Парацетамол", form="табл. 500 мг №20",
-         priceIn=22, leadTime=10, packSize=200, minOrder=200,
-         baseSales=62, salesStart=1.00, salesEnd=1.05, weekendFactor=0.95, seed=202,
-         batches=[dict(code="PR-1180", qty=420, expires=175),
-                  dict(code="PR-1205", qty=900, expires=400),
-                  dict(code="PR-1233", qty=650, expires=610)]),
-    # DEMO: обязательный кейс ТЗ — много запаса, значительная часть скоро неликвидна.
-    dict(id="asc", name="Аскорбиновая кислота", form="драже 500 мг №50",
-         priceIn=35, leadTime=21, packSize=500, minOrder=500, demo=True,
-         baseSales=18, salesStart=1.90, salesEnd=0.35, weekendFactor=0.90, seed=303,
-         batches=[dict(code="AS-0912", qty=3000, expires=65),
-                  dict(code="AS-1004", qty=1500, expires=150),
-                  dict(code="AS-1050", qty=1200, expires=400)]),
-    dict(id="ome", name="Омепразол", form="капс. 20 мг №30",
-         priceIn=55, leadTime=12, packSize=150, minOrder=150,
-         baseSales=28, salesStart=0.95, salesEnd=1.10, weekendFactor=0.95, seed=404,
-         batches=[dict(code="OM-3301", qty=210, expires=96),
-                  dict(code="OM-3320", qty=620, expires=300),
-                  dict(code="OM-3344", qty=340, expires=500)]),
-    dict(id="lor", name="Лоратадин", form="табл. 10 мг №10",
-         priceIn=18, leadTime=7, packSize=200, minOrder=200,
-         baseSales=20, salesStart=1.60, salesEnd=0.55, weekendFactor=0.90, seed=505,
-         batches=[dict(code="LO-2207", qty=400, expires=78),
-                  dict(code="LO-2240", qty=1400, expires=380),
-                  dict(code="LO-2288", qty=900, expires=560)]),
-    dict(id="azi", name="Азитромицин", form="табл. 500 мг №3",
-         priceIn=120, leadTime=20, packSize=50, minOrder=50,
-         baseSales=11, salesStart=1.00, salesEnd=1.00, weekendFactor=0.90, seed=606,
-         batches=[dict(code="AZ-5510", qty=90, expires=210),
-                  dict(code="AZ-5528", qty=45, expires=430)]),
-    dict(id="met", name="Метформин", form="табл. 1000 мг №60",
-         priceIn=95, leadTime=14, packSize=100, minOrder=100,
-         baseSales=17, salesStart=1.00, salesEnd=1.08, weekendFactor=0.95, seed=707,
-         batches=[dict(code="ME-8801", qty=320, expires=155),
-                  dict(code="ME-8820", qty=520, expires=430)]),
-    dict(id="ibu", name="Ибупрофен", form="табл. 400 мг №20",
-         priceIn=30, leadTime=9, packSize=200, minOrder=200,
-         baseSales=33, salesStart=0.90, salesEnd=1.12, weekendFactor=0.90, seed=808,
-         batches=[dict(code="IB-4415", qty=140, expires=71),
-                  dict(code="IB-4430", qty=720, expires=250),
-                  dict(code="IB-4451", qty=410, expires=470)]),
-    dict(id="cet", name="Цетиризин", form="табл. 10 мг №20",
-         priceIn=25, leadTime=8, packSize=100, minOrder=100,
-         baseSales=16, salesStart=1.50, salesEnd=0.60, weekendFactor=0.90, seed=909,
-         batches=[dict(code="CE-7702", qty=900, expires=100),
-                  dict(code="CE-7740", qty=1100, expires=410)]),
-    dict(id="dro", name="Дротаверин", form="табл. 40 мг №20",
-         priceIn=42, leadTime=15, packSize=100, minOrder=100,
-         baseSales=19, salesStart=1.00, salesEnd=1.02, weekendFactor=0.95, seed=1010,
-         batches=[dict(code="DR-6604", qty=380, expires=310),
-                  dict(code="DR-6621", qty=240, expires=530)]),
+def _shift(iso: str) -> date:
+    """Сдвинуть демо-дату на SHIFT, чтобы она была «относительно сегодня»."""
+    return date.fromisoformat(iso) + timedelta(days=SHIFT)
+# ────────────────────────────────────────────────────────────────────
+
+SEASON_MONTHS = {
+    "winter": (12, 1, 2), "spring": (3, 4, 5),
+    "summer": (6, 7, 8), "autumn": (9, 10, 11),
+}
+
+# ---- препараты ------------------------------------------------------------
+# batches: (code, qty, expires_at, flags)   flags = {} | {"recalled":True} | {"storage_violation":True} | {"box_opened":True}
+DRUGS = [
+    ("Амоксициллин 500 мг","таб. №20","Антибиотики",20,145,14,24,0.08,
+     {"winter":1.5,"spring":1.0,"summer":0.6,"autumn":1.3},14,
+     [("AMX-2401",180,"2025-04-10",{}),
+      ("AMX-2402",320,"2025-11-15",{}),
+      ("AMX-2403",400,"2026-08-15",{})]),
+
+    ("Азитромицин 500 мг","таб. №3","Антибиотики",3,320,18,24,0.10,
+     {"winter":1.65,"spring":0.85,"summer":0.65,"autumn":1.15},4,
+     [("AZI-2311",45,"2025-05-20",{}),
+      ("AZI-2401",120,"2026-03-10",{}),
+      ("AZI-2402",140,"2026-12-01",{"recalled":True})]),        # ← флаг вернулся на AZI-2402
+
+    ("Кларитромицин 500 мг","таб. №14","Антибиотики",14,340,14,24,0.06,
+     {"winter":1.45,"spring":0.95,"summer":0.6,"autumn":1.25},7,
+     [("KR-2401",80,"2025-07-01",{}),
+      ("KR-2402",160,"2026-06-15",{})]),
+
+    ("Цефтриаксон 1 г","порошок","Антибиотики",1,180,12,24,0.05,
+     {"winter":1.4,"spring":1.0,"summer":0.7,"autumn":1.2},6,
+     [("CF-2401",150,"2025-10-01",{}),
+      ("CF-2402",200,"2026-09-01",{})]),
+
+    ("Парацетамол 500 мг","таб. №20","Анальгетики",20,65,7,36,0.02,
+     {"winter":1.15,"spring":0.95,"summer":0.85,"autumn":1.05},22,
+     [("PCM-2311",60,"2025-04-15",{}),
+      ("PCM-2401",450,"2026-06-15",{}),
+      ("PCM-2402",600,"2027-08-15",{}),
+      ("PCM-2403",400,"2028-01-15",{})]),
+
+    ("Ибупрофен 400 мг","таб. №50","НПВС",50,210,10,24,-0.05,
+     {"winter":1.2,"spring":1.1,"summer":1.3,"autumn":0.95},8,
+     [("IBU-2312",95,"2025-04-05",{}),
+      ("IBU-2401",280,"2026-01-10",{"box_opened":True}),
+      ("IBU-2402",220,"2026-11-01",{})]),
+
+    ("Дротаверин 40 мг","таб. №20","Спазмолитики",20,80,9,36,0.03,
+     {"winter":1.0,"spring":1.05,"summer":1.0,"autumn":0.95},10,
+     [("DR-2401",400,"2026-12-01",{}),
+      ("DR-2402",500,"2027-10-01",{})]),
+
+    ("Омепразол 20 мг","капс. №30","ЖКТ",30,180,21,24,0.04,
+     {"winter":1.1,"spring":1.05,"summer":0.9,"autumn":1.0},6,
+     [("OMP-2312",210,"2025-05-01",{}),
+      ("OMP-2401",180,"2026-02-20",{}),
+      ("OMP-2402",250,"2026-11-10",{})]),
+
+    ("Смекта 3 г","порошок №10","ЖКТ",10,190,8,36,0.02,
+     {"winter":1.15,"spring":1.05,"summer":1.45,"autumn":1.0},9,
+     [("SM-2401",220,"2027-06-01",{}),
+      ("SM-2402",150,"2028-04-01",{})]),
+
+    ("Регидрон","порошок №1","ЖКТ",1,65,9,36,0.04,
+     {"winter":0.5,"spring":0.9,"summer":2.3,"autumn":1.0},8,
+     [("RG-2401",800,"2027-12-01",{}),
+      ("RG-2402",500,"2028-10-01",{})]),
+
+    ("Осельтамивир 75 мг","капс. №10","Противовирусные",10,890,14,24,0.12,
+     {"winter":4.5,"spring":0.6,"summer":0.15,"autumn":1.2},1.2,
+     [("OS-2401",180,"2026-06-01",{}),
+      ("OS-2402",120,"2027-02-15",{})]),
+
+    ("Ремантадин 50 мг","таб. №20","Противовирусные",20,145,10,24,0.08,
+     {"winter":3.5,"spring":0.7,"summer":0.2,"autumn":1.1},4,
+     [("RM-2401",500,"2026-07-01",{}),
+      ("RM-2402",320,"2027-03-01",{})]),
+
+    ("Аскорбиновая кислота 500 мг","таб. №10","Витамины",10,40,9,24,-0.12,
+     {"winter":1.8,"spring":1.25,"summer":0.7,"autumn":1.05},18,
+     [("ASC-2308",800,"2025-04-10",{}),
+      ("ASC-2401",1200,"2026-05-10",{}),
+      ("ASC-2402",900,"2027-02-15",{})]),
+
+    ("Цинк + витамин C","шипучие №20","Витамины",20,78,9,24,0.05,
+     {"winter":1.9,"spring":1.3,"summer":0.6,"autumn":1.1},9,
+     [("ZC-2401",1200,"2026-04-01",{}),
+      ("ZC-2402",700,"2027-02-01",{})]),
+
+    ("Лоратадин 10 мг","таб. №10","Антигистамины",10,55,12,24,-0.08,
+     {"winter":0.45,"spring":1.75,"summer":1.15,"autumn":0.65},3,
+     [("LOR-2309",340,"2025-04-01",{}),
+      ("LOR-2401",500,"2026-03-05",{}),
+      ("LOR-2402",280,"2027-02-10",{})]),
+
+    ("Цетиризин-капли","фл. 10 мл","Антигистамины",1,95,6,24,0.02,
+     {"winter":0.35,"spring":2.1,"summer":1.25,"autumn":0.55},6,
+     [("CK-2401",700,"2026-05-01",{}),
+      ("CK-2402",450,"2027-04-15",{})]),
+
+    ("Мометазон спрей","фл. 120 доз","Антигистамины",1,420,12,24,0.06,
+     {"winter":0.5,"spring":2.3,"summer":1.15,"autumn":0.7},3,
+     [("MN-2401",380,"2026-07-01",{}),
+      ("MN-2402",220,"2027-02-20",{})]),
+
+    ("Амброксол 30 мг","таб. №20","Дыхательная",20,52,7,24,0.03,
+     {"winter":1.65,"spring":1.05,"summer":0.45,"autumn":1.45},6,
+     [("AB-2309",720,"2026-04-01",{}),
+      ("AB-2310",540,"2027-02-15",{})]),
+
+    ("Ксилометазолин 0.1%","спрей 10 мл","Дыхательная",1,48,6,24,0.04,
+     {"winter":2.0,"spring":0.85,"summer":0.4,"autumn":1.25},10,
+     [("XS-2401",1400,"2026-07-01",{}),
+      ("XS-2402",900,"2027-05-01",{})]),
+
+    ("АЦЦ 200 мг","шипучие №20","Дыхательная",20,145,7,24,0.02,
+     {"winter":1.6,"spring":1.0,"summer":0.5,"autumn":1.5},5,
+     [("ACC-2401",580,"2026-06-01",{}),
+      ("ACC-2402",350,"2027-03-15",{"storage_violation":True})]),
+
+    ("Метформин 1000 мг","таб. №60","Диабет",60,260,20,24,0.03,None,11,
+     [("MET-2312",240,"2025-10-15",{}),
+      ("MET-2401",360,"2026-10-01",{})]),
+
+    ("Эналаприл 10 мг","таб. №20","Кардио",20,48,11,36,0.02,None,9,
+     [("EN-2401",1400,"2027-07-01",{}),
+      ("EN-2402",900,"2028-02-01",{})]),
 ]
 
-HISTORY_DAYS = 120
+
+# ---- генерация продаж -----------------------------------------------------
+def _season_factor(profile, d):
+    if not profile:
+        return 1.0
+    for s, months in SEASON_MONTHS.items():
+        if d.month in months:
+            return profile.get(s, 1.0)
+    return 1.0
 
 
-# ------------------------------------------------------------------
-# Генерация продаж (та же логика, что в прототипе)
-# ------------------------------------------------------------------
-def gen_sales(d, today: date) -> list[int]:
-    rnd = random.Random(d["seed"])
-    n = HISTORY_DAYS
+def _gen_sales(base, trend, profile, days, seed):
+    rng = random.Random(seed)
     out = []
-    for i in range(n - 1, -1, -1):                # i = «сколько дней назад»
-        t = (n - 1 - i) / (n - 1)
-        trend = d["salesStart"] + (d["salesEnd"] - d["salesStart"]) * t
-        weekday = (today - timedelta(days=i)).weekday()
-        weekly = d["weekendFactor"] if weekday >= 5 else 1
-        noise = 0.85 + 0.30 * rnd.random()
-        out.append(max(0, round(d["baseSales"] * trend * weekly * noise)))
+    for i in range(days):
+        d = REAL_TODAY - timedelta(days=days - 1 - i)   # ← было TODAY
+        season = _season_factor(profile, d)
+        trend_part = base * (1 + trend * (i / 365))
+        noise = (rng.random() - 0.5) * 0.15 * base
+        out.append(max(0.5, round((trend_part + noise) * season, 1)))
     return out
 
 
-# ------------------------------------------------------------------
-# Сам сид
-# ------------------------------------------------------------------
+# ---- main -----------------------------------------------------------------
 async def main():
     await db_api.init_pool(DATABASE_URL)
+    try:
+        await db_api.truncate_all()
+        s = await db_api.get_settings()
+        history_days = s["history_days"]
 
-    print("Очистка таблиц...")
-    await db_api.truncate_all()
+        for idx, (name, form, cat, pack, price, lead, shelf,
+                  trend, prof, base, batches) in enumerate(DRUGS, 1):
 
-    print("Вставка препаратов...")
-    today = date.today()
-    drug_id_by_slug: dict[str, int] = {}
-
-    for d in DRUGS_RAW:
-        new_id = await db_api.insert_drug({
-            "name":           d["name"],
-            "form":           d["form"],
-            "price_in":       d["priceIn"],
-            "price_out":      d["priceIn"] * 2,        # условно, для отображения
-            "lead_time_days": d["leadTime"],
-            "pack_size":      d["packSize"],
-            "min_order_qty":  d["minOrder"],
-            "base_sales":     d["baseSales"],
-            "sales_start":    d["salesStart"],
-            "sales_end":      d["salesEnd"],
-            "weekend_factor": d["weekendFactor"],
-            "rng_seed":       d["seed"],
-        })
-        drug_id_by_slug[d["id"]] = new_id
-        print(f"  + {d['name']} (id={new_id})")
-
-    print("Вставка партий...")
-    batch_count = 0
-    for d in DRUGS_RAW:
-        drug_id = drug_id_by_slug[d["id"]]
-        for b in d["batches"]:
-            await db_api.insert_batch(drug_id, {
-                "code":         b["code"],
-                "qty_received": b["qty"],
-                "qty_left":     b["qty"],
-                "arrived_at":   today - timedelta(days=30),         # условно
-                "expires_at":   today + timedelta(days=b["expires"]),
+            drug_id = await db_api.insert_drug({
+                "name": name, "form": form, "category": cat,
+                "price_in": price, "lead_time_days": lead,
+                "pack_size": pack, "shelf_life_months": shelf,
+                "trend": trend,
+                "season_profile": prof,
             })
-            batch_count += 1
-    print(f"  Всего партий: {batch_count}")
 
-    print(f"Генерация истории продаж за {HISTORY_DAYS} дней...")
-    sales_rows: list[tuple[int, date, int]] = []
-    for d in DRUGS_RAW:
-        drug_id = drug_id_by_slug[d["id"]]
-        series = gen_sales(d, today)
-        for i, qty in enumerate(series):
-            sold_on = today - timedelta(days=(HISTORY_DAYS - 1 - i))
-            sales_rows.append((drug_id, sold_on, qty))
+            for code, qty, exp, flags in batches:
+                await db_api.insert_batch(drug_id, {
+                    "code": code, "qty": qty,
+                    "arrived_at":   REAL_TODAY - timedelta(days=180),
+                    "expires_at":   _shift(exp),                # ← сдвинули
+                    "recalled":          bool(flags.get("recalled", False)),
+                    "storage_violation": bool(flags.get("storage_violation", False)),
+                    "box_opened":        bool(flags.get("box_opened", False)),
+                })
 
-    # вставка пачкой
-    await db_api.insert_sales_bulk(sales_rows)
-    print(f"  Всего записей: {len(sales_rows)}")
-
-    await db_api.close_pool()
-    print("Готово.")
+            # история продаж — тоже относительно REAL_TODAY
+            sales = _gen_sales(base, trend, prof, history_days, seed=100 + idx)
+            rows = [
+                (drug_id, REAL_TODAY - timedelta(days=history_days - 1 - i), int(round(v)))
+                for i, v in enumerate(sales)
+            ]
+            await db_api.insert_sales_bulk(rows)
+            print(f"✓ {name}: {len(batches)} партий, {len(sales)} дн. продаж")
+        print("Готово.")
+    finally:
+        await db_api.close_pool()
 
 
 if __name__ == "__main__":

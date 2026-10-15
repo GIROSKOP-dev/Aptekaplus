@@ -1,4 +1,4 @@
-"""Чтение .env."""
+﻿"""Чтение .env."""
 import os
 from dotenv import load_dotenv
 
