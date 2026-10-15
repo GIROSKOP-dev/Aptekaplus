@@ -297,3 +297,51 @@ thead th.sort-desc::after{content:'▼';opacity:1;color:var(--accent)}
 }
 .filter-btn:hover{border-color:var(--accent);color:var(--accent)}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+
+/* ============ Кнопка «Помощь» ============ */
+.help-btn{
+  padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;
+  font-size:13px;font-weight:700;color:var(--accent);cursor:pointer;
+  transition:all .15s;font-family:inherit;
+}
+.help-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ============ Модалка ============ */
+.modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal[hidden]{display:none}
+.modal-overlay{position:absolute;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(3px)}
+.modal-window{
+  position:relative;background:#fff;border-radius:16px;max-width:820px;width:100%;
+  max-height:88vh;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.35);animation:modalIn .2s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
+.modal-close{
+  position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:8px;
+  border:1px solid var(--line);background:#fff;cursor:pointer;font-size:15px;
+  color:var(--muted);font-weight:700;transition:all .15s;z-index:2;font-family:inherit;
+}
+.modal-close:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+.modal-content{padding:30px 34px;overflow-y:auto}
+.modal-content h2{font-size:22px;font-weight:750;margin-bottom:6px;letter-spacing:-.01em}
+.modal-lead{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+.modal-nav{
+  display:flex;flex-wrap:wrap;gap:6px;padding:12px 0 18px;margin-bottom:18px;
+  border-bottom:1px solid var(--line);
+}
+.modal-nav a{
+  padding:6px 12px;border-radius:20px;background:#f0f3f9;color:var(--text);
+  font-size:12.5px;font-weight:600;text-decoration:none;transition:all .15s;
+}
+.modal-nav a:hover{background:var(--accent);color:#fff}
+.modal-content section{margin-bottom:24px;scroll-margin-top:20px}
+.modal-content section:last-of-type{margin-bottom:8px}
+.modal-content h3{font-size:15px;font-weight:750;margin-bottom:10px;color:var(--text)}
+.modal-content ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+.modal-content li{font-size:13.5px;line-height:1.6;color:#374151;padding-left:18px;position:relative}
+.modal-content li::before{content:'•';position:absolute;left:4px;color:var(--accent);font-weight:700}
+.modal-content li b{color:var(--text)}
+.modal-content code{background:#f0f3f9;padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+.modal-tip{background:#eff6ff;border-left:3px solid var(--accent);padding:10px 14px;border-radius:6px;font-size:13px;color:#1e40af;margin-top:10px}
+.modal-footer{text-align:center;color:var(--muted);font-size:12px;padding-top:18px;margin-top:10px;border-top:1px solid var(--line)}

@@ -50,6 +50,8 @@ async function load() {
   }
 }
 
+
+
 function renderAll() {
   const open = new Set([...document.querySelectorAll('.detail-row:not([hidden])')].map(r => r.id));
   renderKPIs(); renderDashboard(); renderStock();
@@ -655,4 +657,31 @@ document.getElementById('periodPreset').addEventListener('change', load);
 })();
 
 bindSearch();
+/* ---------- Модалка помощи ---------- */
+(function () {
+  const modal = document.getElementById('helpModal');
+  const btn   = document.getElementById('helpBtn');
+  if (!modal || !btn) return;
+
+  function openModal()  { modal.hidden = false; document.body.style.overflow = 'hidden'; }
+  function closeModal() { modal.hidden = true;  document.body.style.overflow = ''; }
+
+  btn.addEventListener('click', openModal);
+
+  modal.querySelectorAll('[data-close]').forEach(el =>
+    el.addEventListener('click', closeModal)
+  );
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+
+  modal.querySelectorAll('.modal-nav a').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const target = modal.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+})();
 load();
