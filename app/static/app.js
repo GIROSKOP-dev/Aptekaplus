@@ -332,12 +332,14 @@ function renderStock() {
             <div>Полный срок годности: <b>${d.shelfLifeMonths} мес.</b> · порог брака <b>${(d.shelfLifeMonths*30*0.6).toFixed(0)} дн.</b></div>
           </div></div>
         <div><div class="detail-title">Партии и их состояние</div>
-          <table class="subtable"><thead><tr>
-            <th>Партия</th><th class="num">Кол-во</th><th>Годен до</th>
-            <th class="num">% срока</th><th class="num">Дн. до порога</th>
-            <th class="num">Покрытие</th><th class="num">Продастся</th>
-            <th class="num">Списание</th><th class="num">Потеря</th></tr></thead>
-            <tbody>${batchRows}</tbody></table>
+          <div class="table-scroll">
+            <table class="subtable"><thead><tr>
+              <th>Партия</th><th class="num">Кол-во</th><th>Годен до</th>
+              <th class="num">% срока</th><th class="num">Дн. до порога</th>
+              <th class="num">Покрытие</th><th class="num">Продастся</th>
+              <th class="num">Списание</th><th class="num">Потеря</th></tr></thead>
+              <tbody>${batchRows}</tbody></table>
+          </div>
           <div class="muted" style="font-size:11.5px;margin-top:8px">
             Покрытие = сколько дней продаж хватит остатка. Если покрытие &gt; дн. до порога — часть сгорит.</div>
         </div></div></td>
@@ -350,15 +352,17 @@ function renderStock() {
         <h2>Остатки и сроки годности</h2>
         <p>Брак = срок ≤60%. Статус — сравнение покрытия с днями до порога. Клик по строке — детали</p>
       </div></div>
-      <table><thead><tr>
-        <th data-sort="name">Препарат</th>
-        <th class="num" data-sort="stockTotal">Остаток, уп</th>
-        <th class="num" data-sort="stockSellable">Продаваемый</th>
-        <th class="num" data-sort="forecast">Прогноз, уп/д</th>
-        <th class="num" data-sort="daysOfSupply">Запас, дн</th>
-        <th class="num" data-sort="lossMoney">Риск списания</th>
-        <th data-sort="status">Статус</th>
-      </tr></thead><tbody>${rows}</tbody></table>
+      <div class="table-scroll">
+        <table><thead><tr>
+          <th data-sort="name">Препарат</th>
+          <th class="num" data-sort="stockTotal">Остаток, уп</th>
+          <th class="num" data-sort="stockSellable">Продаваемый</th>
+          <th class="num" data-sort="forecast">Прогноз, уп/д</th>
+          <th class="num" data-sort="daysOfSupply">Запас, дн</th>
+          <th class="num" data-sort="lossMoney">Риск списания</th>
+          <th data-sort="status">Статус</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>
     </div>`;
   bindSort();
 }
@@ -423,12 +427,14 @@ function renderPriority() {
       <h2>Партии к первоочередной продаже</h2>
       <p>Сортировка: брак → потери → дни до порога. Срочность — сравнение дней до порога 60% со сроком поставки</p>
     </div></div>
-    <table><thead><tr>
-      <th>#</th><th>Препарат</th><th>Партия</th><th class="num">Остаток</th>
-      <th>Годен до</th><th class="num">%</th><th class="num">Дн. порог</th>
-      <th>Срочность</th>
-      <th class="num">Покрытие</th><th class="num">Риск</th><th>Вердикт</th><th>Обоснование</th>
-    </tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty">Нет партий</td></tr>'}</tbody></table></div>`;
+    <div class="table-scroll">
+      <table><thead><tr>
+        <th>#</th><th>Препарат</th><th>Партия</th><th class="num">Остаток</th>
+        <th>Годен до</th><th class="num">%</th><th class="num">Дн. порог</th>
+        <th>Срочность</th>
+        <th class="num">Покрытие</th><th class="num">Риск</th><th>Вердикт</th><th>Обоснование</th>
+      </tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty">Нет партий</td></tr>'}</tbody></table>
+    </div></div>`;
 }
 
 /* ---------- Прогноз потерь ---------- */
@@ -463,11 +469,13 @@ function renderLoss() {
         <div style="font-size:19px;font-weight:750;color:var(--danger)">${money(tm)}</div>
         <div class="muted" style="font-size:12px">${nf(tq)} упаковок</div>
       </div></div>
-      <table><thead><tr>
-        <th>Препарат</th><th class="num">Остаток</th><th class="num">Прогноз</th>
-        <th class="num">Запас, дн</th><th class="num">Списание</th>
-        <th class="num">Потеря</th><th>Причина</th>
-      </tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty">Списаний не прогнозируется 👍</td></tr>'}</tbody></table>
+      <div class="table-scroll">
+        <table><thead><tr>
+          <th>Препарат</th><th class="num">Остаток</th><th class="num">Прогноз</th>
+          <th class="num">Запас, дн</th><th class="num">Списание</th>
+          <th class="num">Потеря</th><th>Причина</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty">Списаний не прогнозируется 👍</td></tr>'}</tbody></table>
+      </div>
     </div>`;
 }
 

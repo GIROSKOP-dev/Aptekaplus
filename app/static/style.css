@@ -11,6 +11,25 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 
+/* ============ Горизонтальный скролл таблиц ============ */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;   /* плавный скролл на iOS */
+  overscroll-behavior-x: contain;
+}
+.table-scroll table {
+  min-width: 760px;                    /* шире мобильного → появляется скролл */
+}
+/* чтобы скролл не «уезжал» под sticky-хедер и не резался padding'ом */
+.table-scroll::-webkit-scrollbar { height: 8px; }
+.table-scroll::-webkit-scrollbar-thumb { background:#c7cddb; border-radius:4px; }
+
+@media (max-width: 900px) {
+  .card-head { padding: 14px 16px; }
+  .table-scroll table { min-width: 720px; }
+  tbody td, thead th { padding: 10px 10px; }
+}
+
 .app{display:flex;min-height:100vh}
 .sidebar{
   width:260px;background:var(--sb-bg);color:var(--sb-text);
