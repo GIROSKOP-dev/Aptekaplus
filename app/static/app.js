@@ -56,7 +56,6 @@ function renderAll() {
   const open = new Set([...document.querySelectorAll('.detail-row:not([hidden])')].map(r => r.id));
   renderKPIs(); renderDashboard(); renderStock();
   renderPriority(); renderLoss(); renderPurchase();
-  bindRowToggles();
   open.forEach(id => {
     const det = document.getElementById(id); if (!det) return;
     det.hidden = false;
@@ -365,6 +364,7 @@ function renderStock() {
       </div>
     </div>`;
   bindSort();
+  bindRowToggles();    
 }
 
 /* ---------- Приоритетные партии ---------- */
