@@ -665,6 +665,112 @@ document.getElementById('periodPreset').addEventListener('change', load);
 })();
 
 bindSearch();
+
+/* ---------- Загрузка CSV и шаблон ---------- */
+function downloadTemplate() {
+  const csv = `# АптекаПлюс — шаблон базы данных
+# Секция [DRUGS] — препараты, [BATCHES] — партии.
+# id связывает партию с препаратом. Флаги: 1 = проблема, 0 или пусто = норма.
+
+[DRUGS]
+id,name,form,category,packSize,priceIn,leadTime,shelfLifeMonths
+n1,Анальгин 500 мг,таб. №10,Анальгетики,10,45,7,24
+n2,Бисопролол 5 мг,таб. №30,Кардио,30,120,12,24
+n3,Амлодипин 5 мг,таб. №30,Кардио,30,95,11,36
+n4,Магний B6,таб. №50,Витамины,50,220,9,24
+n5,Линекс,капс. №16,ЖКТ,16,340,10,24
+n6,Энтеросгель,паста 225 г,ЖКТ,1,380,8,36
+
+[BATCHES]
+drugId,code,qty,expiry,boxOpened,storageViolation,recalled
+n1,ANG-2601,150,2027-06-15,0,0,0
+n1,ANG-2602,220,2028-03-01,0,0,0
+n2,BSP-2601,90,2027-01-20,0,0,0
+n2,BSP-2602,180,2027-10-10,0,0,0
+n2,BSP-2603,120,2028-08-01,0,0,0
+n3,AML-2601,200,2027-05-12,0,0,0
+n3,AML-2602,160,2028-06-30,0,0,0
+n4,MG-2601,140,2027-09-15,0,0,0
+n4,MG-2602,100,2028-04-01,0,0,0
+n5,LNX-2601,75,2027-03-22,0,0,0
+n5,LNX-2602,110,2027-12-01,0,0,0
+n6,ENT-2601,60,2028-02-15,0,0,0
+n6,ENT-2602,45,2029-01-10,0,0,1
+`;
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "aptekaplus-template.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function bindUpload() {
+  const btn      = document.getElementById("uploadBtn");
+  const tplBtn   = document.getElementById("templateBtn");
+  const input    = document.getElementById("uploadInput");
+  if (!btn || !input) return;
+
+  btn.addEventListener("click", () => input.click());
+  tplBtn?.addEventListener("click", downloadTemplate);
+
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const ok = confirm(
+  `Загрузить «${file.name}»?\n\n` +
+  `Новые препараты и партии добавятся к существующим.\n` +
+  `Совпадения по имени препарата и коду партии будут пропущены.`
+);
+    if (!ok) { input.value = ""; return; }
+
+    const fd = new FormData();
+    fd.append("file", file);
+
+    const prev = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "⏳ Загрузка…";
+
+    try {
+      const res  = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = typeof data.detail === "string"
+          ? data.detail
+          : (data.detail?.message || JSON.stringify(data.detail) || `HTTP ${res.status}`);
+        throw new Error(msg);
+      }
+
+      let msg = `Добавлено препаратов: ${data.inserted.drugs_added}`;
+      if (data.inserted.drugs_reused > 0) {
+        msg += ` (${data.inserted.drugs_reused} уже были, переиспользованы)`;
+      }
+      msg += `\nДобавлено партий: ${data.inserted.batches_added}`;
+      if (data.inserted.batches_skipped > 0) {
+        msg += `\nПропущено партий: ${data.inserted.batches_skipped}`;
+      }
+      if (data.errors?.length) {
+        msg += `\n\nОшибок в строках: ${data.errors.length}`;
+        msg += "\n" + data.errors.slice(0, 5).join("\n");
+        if (data.errors.length > 5) msg += `\n… и ещё ${data.errors.length - 5}`;
+      }
+      alert(msg);
+      await load();
+    } catch (e) {
+      alert("Ошибка загрузки: " + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+      input.value = "";
+    }
+  });
+}
+
+bindUpload();
 /* ---------- Модалка помощи ---------- */
 (function () {
   const modal = document.getElementById('helpModal');

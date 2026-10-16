@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 import asyncpg
+from datetime import date as _date
 
 _pool: Optional[asyncpg.Pool] = None
 
@@ -140,3 +141,82 @@ async def insert_sales_bulk(rows: list[tuple[int, Any, int]]) -> None:
 async def truncate_all() -> None:
     async with _p().acquire() as c:
         await c.execute("TRUNCATE sales, batches, drugs RESTART IDENTITY CASCADE")
+
+# ------------------------------------------------------------------
+# Массовая замена из CSV
+# ------------------------------------------------------------------
+async def bulk_append_from_csv(
+    drugs_csv: list[dict[str, Any]],
+    batches_csv: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Добавляет препараты и партии, не трогая существующие.
+
+    Если препарат с таким же именем уже есть — переиспользуем его id
+    (и не создаём дубль). Партии привязываются к существующему препарату.
+    """
+    from datetime import date as _date
+
+    async with _p().acquire() as c:
+        async with c.transaction():
+            csv_to_db: dict[str, int] = {}
+            added_drugs = 0
+            reused_drugs = 0
+
+            for d in drugs_csv:
+                existing = await c.fetchval(
+                    "SELECT id FROM drugs WHERE name = $1 LIMIT 1",
+                    d["name"],
+                )
+                if existing is not None:
+                    csv_to_db[d["csv_id"]] = existing
+                    reused_drugs += 1
+                    continue
+
+                db_id = await c.fetchval("""
+                    INSERT INTO drugs (name, form, category, price_in,
+                                       lead_time_days, pack_size, shelf_life_months,
+                                       trend, season_profile)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7, 0.03, NULL)
+                    RETURNING id
+                """, d["name"], d["form"], d["category"], d["price_in"],
+                     d["lead_time_days"], d["pack_size"], d["shelf_life_months"])
+                csv_to_db[d["csv_id"]] = db_id
+                added_drugs += 1
+
+            added_batches = 0
+            skipped = 0
+            for b in batches_csv:
+                drug_id = csv_to_db.get(b["csv_drug_id"])
+                if drug_id is None:
+                    skipped += 1
+                    continue
+
+                try:
+                    expiry_date = _date.fromisoformat(b["expiry"])
+                except (ValueError, TypeError):
+                    skipped += 1
+                    continue
+
+                # защита от дублей партий: код партии уникален у препарата
+                exists = await c.fetchval(
+                    "SELECT 1 FROM batches WHERE drug_id = $1 AND code = $2",
+                    drug_id, b["code"],
+                )
+                if exists:
+                    skipped += 1
+                    continue
+
+                await c.execute("""
+                    INSERT INTO batches (drug_id, code, qty, arrived_at, expires_at,
+                                         recalled, storage_violation, box_opened)
+                    VALUES ($1,$2,$3, CURRENT_DATE, $4,$5,$6,$7)
+                """, drug_id, b["code"], b["qty"], expiry_date,
+                     b["recalled"], b["storage_violation"], b["box_opened"])
+                added_batches += 1
+
+            return {
+                "drugs_added":    added_drugs,
+                "drugs_reused":   reused_drugs,
+                "batches_added":  added_batches,
+                "batches_skipped": skipped,
+            }

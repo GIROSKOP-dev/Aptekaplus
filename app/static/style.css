@@ -364,3 +364,12 @@ thead th.sort-desc::after{content:'▼';opacity:1;color:var(--accent)}
 .modal-content code{background:#f0f3f9;padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
 .modal-tip{background:#eff6ff;border-left:3px solid var(--accent);padding:10px 14px;border-radius:6px;font-size:13px;color:#1e40af;margin-top:10px}
 .modal-footer{text-align:center;color:var(--muted);font-size:12px;padding-top:18px;margin-top:10px;border-top:1px solid var(--line)}
+
+/* ============ Кнопки загрузки CSV ============ */
+.upload-btn{
+  padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;
+  font-size:13px;font-weight:700;color:#16a34a;cursor:pointer;transition:all .15s;
+  font-family:inherit;
+}
+.upload-btn:hover{background:#16a34a;color:#fff;border-color:#16a34a}
+.upload-btn:disabled{opacity:.6;cursor:wait}
